@@ -1,0 +1,240 @@
+https://www.kaggle.com/datasets/mathchi/online-retail-ii-data-set-from-ml-repository/data
+
+#retail_II table
+
+Invoice StockCode Description Quantity  InvoiceDate Price Customer_ID Country
+536365  85123A  WHITE HANGING HEART T-LIGHT HOLDER  6 2010-12-01 08:26:00.0000000 2,55  17850 United Kingdom
+536365  71053 WHITE METAL LANTERN 6 2010-12-01 08:26:00.0000000 3,39  17850 United Kingdom
+536365  84406B  CREAM CUPID HEARTS COAT HANGER  8 2010-12-01 08:26:00.0000000 2,75  17850 United Kingdom
+536365  84029G  KNITTED UNION FLAG HOT WATER BOTTLE 6 2010-12-01 08:26:00.0000000 3,39  17850 United Kingdom
+536365  84029E  RED WOOLLY HOTTIE WHITE HEART.  6 2010-12-01 08:26:00.0000000 3,39  17850 United Kingdom
+536365  22752 SET 7 BABUSHKA NESTING BOXES  2 2010-12-01 08:26:00.0000000 7,65  17850 United Kingdom
+536365  21730 GLASS STAR FROSTED T-LIGHT HOLDER 6 2010-12-01 08:26:00.0000000 4,25  17850 United Kingdom 
+.
+.
+.
+
+#1. Tenure
+
+SELECT Customer_ID, DATEDIFF(DAY,MIN(InvoiceDate),'01012012') AS TENURE
+FROM retail_II
+GROUP BY Customer_ID
+ORDER BY DATEDIFF(DAY,MIN(InvoiceDate), '01012012') 
+
+#2. Monetary
+
+SELECT Customer_ID, SUM(Quantity * Price) AS Monetary
+FROM retail_II
+GROUP BY Customer_ID
+ORDER BY SUM(Quantity * Price) DESC
+
+#3. Basket Size
+
+SELECT Customer_ID, SUM(Quantity * Price) / COUNT(DISTINCT Invoice) AS Basket_Size 
+FROM retail_II
+GROUP BY Customer_ID 
+ORDER BY SUM(Quantity * Price) / COUNT(DISTINCT Invoice) DESC
+
+#4. Frequency. 
+
+SELECT Customer_ID, COUNT(DISTINCT Invoice) AS Frequency 
+FROM retail_II
+GROUP BY Customer_ID
+ORDER BY COUNT(DISTINCT Invoice) DESC 
+
+#5. Recency.
+
+SELECT Customer_ID, DATEDIFF(DAY, MAX(InvoiceDate), '01012012') AS RECENCY
+FROM retail_II
+GROUP BY Customer_ID
+ORDER BY DATEDIFF(DAY, '01012012', MAX(InvoiceDate)) 
+
+# Create empty table 
+
+CREATE TABLE RFM_ENGINK (
+CustomerID VARCHAR (30),
+First_InvoiceDate DATETIME,
+Last_InvoiceDate DATETIME,
+Recency INT,
+TENURE INT,
+Frequency INT,
+Monetary INT,
+Basket_size Float 
+)
+
+INSERT INTO RFM_ENGINK (CustomerID)
+SELECT DISTINCT Customer_ID FROM retail_II
+
+#At this point RFM_ENGINK looks like ; 
+
+CustomerID	First_InvoiceDate	Late_InvoiceDate	Recency	Frequency	Monetary
+17850	NULL	NULL	NULL	NULL	NULL
+17850	NULL	NULL	NULL	NULL	NULL
+17850	NULL	NULL	NULL	NULL	NULL
+17850	NULL	NULL	NULL	NULL	NULL
+17850	NULL	NULL	NULL	NULL	NULL
+17850	NULL	NULL	NULL	NULL	NULL
+
+
+UPDATE RFM_ENGINK SET First_InvoiceDate =	
+(SELECT MIN(InvoiceDate) 
+FROM retail_II AS r
+WHERE r.Customer_ID = RFM_ENGINK.CustomerID)
+
+UPDATE RFM_ENGINK SET Last_InvoiceDate = 
+(SELECT MAX(InvoiceDate)
+FROM retail_II AS r
+WHERE r.Customer_ID = RFM_ENGINK.CustomerID)
+
+UPDATE RFM_ENGINK SET Recency =
+(SELECT DATEDIFF(DAY, MAX(InvoiceDate), '01012012')
+FROM retail_II AS r
+WHERE r.Customer_ID = RFM_ENGINK.CustomerID)
+
+UPDATE RFM_ENGINK SET Frequency =
+(SELECT COUNT(DISTINCT Invoice)
+FROM retail_II AS r
+WHERE r.Customer_ID = RFM_ENGINK.CustomerID)
+
+UPDATE RFM_ENGINK SET Monetary =
+(SELECT SUM(Quantity * Price)
+FROM retail_II AS r
+WHERE r.Customer_ID = RFM_ENGINK.CustomerID)
+
+UPDATE RFM_ENGINK SET Tenure = 
+(SELECT DATEDIFF(DAY,MIN(InvoiceDate),'01012012')
+FROM retail_II AS r 
+WHERE r.Customer_ID = RFM_ENGINK.CustomerID)
+
+#At this point RFM_ENGINK looks like ; 
+
+CustomerID	First_InvoiceDate	Last_InvoiceDate	Recency	Tenure	Frequency	Monetary	Basket_size
+15039	2010-12-06 11:26:00.000	2011-11-30 11:31:00.000	32	391	52	19786	380,50846153846175
+15805	2010-12-10 09:33:00.000	2011-11-16 16:32:00.000	46	387	20	5452	272,60849999999994
+17315	2010-12-17 12:19:00.000	2011-12-09 11:58:00.000	23	380	43	6204	144,28976744186048
+13534	2010-12-16 15:23:00.000	2011-12-07 14:52:00.000	25	381	43	5613	130,53674418604652
+13389	2011-04-21 12:12:00.000	2011-11-28 14:01:00.000	34	255	3	797	265,9866666666667
+13482	2011-04-21 17:03:00.000	2011-04-21 17:03:00.000	255	255	1	184	184,64
+
+
+ALTER TABLE RFM_ENGINK ADD Recency_Score INT, Frequency_Score INT, RF_score INT
+
+UPDATE RFM_ENGINK SET Frequency_score = 
+( 
+SELECT sub.Frequency_score
+  FROM
+  (SELECT CustomerID, Frequency, NTILE(5) OVER (ORDER BY Frequency) AS Frequency_score
+  FROM RFM_ENGINK ) sub
+WHERE CustomerID = RFM_ENGINK.CustomerID)
+
+UPDATE RFM_ENGINK SET Recency_Score = 
+(
+SELECT sub.Recency_score
+FROM
+(SELECT CustomerID, Recency, NTILE(5) OVER (ORDER BY Recency DESC) AS Recency_score
+FROM RFM_ENGINK) sub
+WHERE CustomerID = RFM_ENGINK.CustomerID
+)
+
+UPDATE RFM_ENGINK SET RF_score = 
+SELECT CONVERT(VARCHAR,Recency_score) + CONVERT(VARCHAR,Frequency_score)
+
+#At this point RFM_ENGINK looks like;
+
+CustomerID	First_InvoiceDate	Last_InvoiceDate	Recency	Tenure	Frequency	Monetary	Basket_size	Recency_Score	Frequency_Score	RF_Score
+15039	2010-12-06 11:26:00.000	2011-11-30 11:31:00.000	32	391	52	19786	380,50846153846175	5	5	55
+15805	2010-12-10 09:33:00.000	2011-11-16 16:32:00.000	46	387	20	5452	272,60849999999994	4	5	45
+17315	2010-12-17 12:19:00.000	2011-12-09 11:58:00.000	23	380	43	6204	144,28976744186048	5	5	55
+13534	2010-12-16 15:23:00.000	2011-12-07 14:52:00.000	25	381	43	5613	130,53674418604652	5	5	55
+13389	2011-04-21 12:12:00.000	2011-11-28 14:01:00.000	34	255	3	797	265,9866666666667	5	3	53
+
+#RFM segmentation mapping scores
+
+Segment	RF
+About to Sleep	31
+About to Sleep	32
+At Risk	13
+At Risk	23
+At Risk	14
+At Risk	24
+Can’t Lose Them	15
+Can’t Lose Them	25
+Champions	54
+Champions	55
+Hibernating	11
+Hibernating	21
+Hibernating	12
+Hibernating	22
+Loyal Customers	34
+Loyal Customers	35
+Loyal Customers	44
+Loyal Customers	45
+Need Attention	33
+New Customers	51
+Potential Loyalists	43
+Potential Loyalists	53
+Potential Loyalists	42
+Potential Loyalists	52
+Promising	41
+
+
+# According to the mapping ; 
+
+UPDATE RFM_ENGINK SET Segment = 'About to Sleep'
+WHERE Recency_Score LIKE '[3]%' AND Frequency_score LIKE '[1-2]%'
+
+UPDATE RFM_ENGINK SET Segment = 'At Risk'
+WHERE Recency_Score LIKE '[1-2]%' AND Frequency_score LIKE '[3-4]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Cant Lose Them'
+WHERE Recency_Score LIKE '[1-2]%' AND Frequency_score LIKE '[5]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Champions'
+WHERE Recency_Score LIKE '[5]%' AND Frequency_score LIKE '[4-5]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Hibernating'
+WHERE Recency_Score LIKE '[1-2]%' AND Frequency_score LIKE '[1-2]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Loyal Customers'
+WHERE Recency_Score LIKE '[3-4]%' AND Frequency_score LIKE '[4-5]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Need Attention'
+WHERE Recency_Score LIKE '[3]%' AND Frequency_score LIKE '[3]%'
+
+UPDATE RFM_ENGINK SET Segment = 'New Customers'
+WHERE Recency_Score LIKE '[5]%' AND Frequency_score LIKE '[1]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Potential Loyalists'
+WHERE Recency_Score LIKE '[4-5]%' AND Frequency_score LIKE '[2-3]%'
+
+UPDATE RFM_ENGINK SET Segment = 'Promising'
+WHERE Recency_Score LIKE '[4]%' AND Frequency_score LIKE '[1]%'
+
+# RFM_ENGINK with segments
+
+CustomerID	First_InvoiceDate	Last_InvoiceDate	Recency	Tenure	Frequency	Monetary	Basket_size	Recency_Score	Frequency_Score	RF_Score	Segment
+15039	2010-12-06 11:26:00.000	2011-11-30 11:31:00.000	32	391	52	19786	380,50846153846175	5	5	55	Champions
+15805	2010-12-10 09:33:00.000	2011-11-16 16:32:00.000	46	387	20	5452	272,60849999999994	4	5	45	Loyal Customers
+17315	2010-12-17 12:19:00.000	2011-12-09 11:58:00.000	23	380	43	6204	144,28976744186048	5	5	55	Champions
+13534	2010-12-16 15:23:00.000	2011-12-07 14:52:00.000	25	381	43	5613	130,53674418604652	5	5	55	Champions
+13389	2011-04-21 12:12:00.000	2011-11-28 14:01:00.000	34	255	3	797	265,9866666666667	5	3	53	Potential Loyalists
+13482	2011-04-21 17:03:00.000	2011-04-21 17:03:00.000	255	255	1	184	184,64	1	1	11	Hibernating
+14231	2011-02-24 11:55:00.000	2011-06-13 15:35:00.000	202	311	5	822	164,412	1	4	14	At Risk
+
+SELECT Segment, COUNT(CustomerID) AS Segment_Size
+FROM RFM_ENGINK 
+GROUP BY Segment
+ORDER BY COUNT(Segment) DESC
+
+Segment	Segment_Size
+Hibernating	1061
+Loyal Customers	804
+Champions	644
+At Risk	619
+Potential Loyalists	497
+About to Sleep	348
+Need Attention	206
+Promising	87
+Cant Lose Them	70
+New Customers	36
+
